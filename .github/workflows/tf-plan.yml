@@ -1,0 +1,130 @@
+name: Terraform Plan
+
+on:
+  workflow_call:
+    inputs:
+      projects:
+        description: 'JSON array of project execution payloads'
+        required: true
+        type: string
+      pr-number:
+        description: 'Pull request number'
+        required: true
+        type: string
+      head-sha:
+        description: 'Head commit SHA to check out and key artifacts against'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  id-token: write
+  statuses: write
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        project: ${{ fromJson(inputs.projects) }}
+      fail-fast: false
+
+    steps:
+      - name: Check out repository at PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.head-sha }}
+
+      - name: Set up Terraform ${{ matrix.project.terraform_version }}
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ matrix.project.terraform_version }}
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ matrix.project.role_arn }}
+          aws-region: ${{ matrix.project.aws_region }}
+
+      - name: Terraform init
+        working-directory: ${{ matrix.project.dir }}
+        run: |
+          BACKEND_ARGS="-backend-config=bucket=${{ matrix.project.backend_bucket }} \
+            -backend-config=key=${{ matrix.project.backend_key }} \
+            -backend-config=region=${{ matrix.project.backend_region }}"
+          if [ -n "${{ matrix.project.backend_dynamodb_table }}" ]; then
+            BACKEND_ARGS="$BACKEND_ARGS -backend-config=dynamodb_table=${{ matrix.project.backend_dynamodb_table }}"
+          fi
+          terraform init $BACKEND_ARGS -reconfigure
+
+      - name: Select Terraform workspace
+        working-directory: ${{ matrix.project.dir }}
+        run: terraform workspace select -or-create ${{ matrix.project.workspace }}
+
+      - name: Terraform plan
+        id: plan
+        working-directory: ${{ matrix.project.dir }}
+        run: |
+          set +e
+          terraform plan -no-color -out=tfplan 2>&1 | tee plan-output.txt
+          EXIT_CODE=${PIPESTATUS[0]}
+          echo "exit-code=${EXIT_CODE}" >> "$GITHUB_OUTPUT"
+          exit $EXIT_CODE
+
+      - name: Upload plan artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          # Artifact name includes PR number + head SHA to prevent stale plan consumption
+          name: tfplan-${{ matrix.project.name }}-${{ inputs.pr-number }}-${{ inputs.head-sha }}
+          path: |
+            ${{ matrix.project.dir }}/tfplan
+            ${{ matrix.project.dir }}/plan-output.txt
+          retention-days: 7
+
+      - name: Set pending apply-required status
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: '${{ inputs.head-sha }}',
+              state: 'pending',
+              context: 'terraform/apply-required',
+              description: 'Terraform plan succeeded — apply required before merge',
+            })
+
+      - name: Post plan result comment
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs')
+            const planOutput = fs.existsSync('${{ matrix.project.dir }}/plan-output.txt')
+              ? fs.readFileSync('${{ matrix.project.dir }}/plan-output.txt', 'utf8')
+              : '(no plan output found)'
+            const exitCode = '${{ steps.plan.outputs.exit-code }}'
+            const success = exitCode === '0'
+            const icon = success ? '✅' : '❌'
+            const status = success ? 'succeeded' : 'failed'
+            const body = [
+              `${icon} **Terraform Plan \`${{ matrix.project.name }}\`** ${status}`,
+              '',
+              '<details><summary>Plan Output</summary>',
+              '',
+              '```',
+              planOutput.slice(0, 60000),
+              '```',
+              '',
+              '</details>',
+            ].join('\n')
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: ${{ inputs.pr-number }},
+              body,
+            })
