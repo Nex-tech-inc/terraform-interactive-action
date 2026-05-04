@@ -1,0 +1,172 @@
+name: Terraform Apply
+
+on:
+  workflow_call:
+    inputs:
+      projects:
+        description: 'JSON array of project execution payloads'
+        required: true
+        type: string
+      pr-number:
+        description: 'Pull request number'
+        required: true
+        type: string
+      head-sha:
+        description: 'Head commit SHA — must match the plan artifact SHA'
+        required: true
+        type: string
+      commenter:
+        description: 'GitHub username who triggered the apply'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+  statuses: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        project: ${{ fromJson(inputs.projects) }}
+      fail-fast: false
+
+    steps:
+      - name: Check out repository at PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.head-sha }}
+
+      - name: Set up Terraform ${{ matrix.project.terraform_version }}
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ matrix.project.terraform_version }}
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ matrix.project.role_arn }}
+          aws-region: ${{ matrix.project.aws_region }}
+
+      - name: Download plan artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tfplan-${{ matrix.project.name }}-${{ inputs.pr-number }}-${{ inputs.head-sha }}
+          path: ${{ matrix.project.dir }}
+
+      - name: Terraform init
+        working-directory: ${{ matrix.project.dir }}
+        run: |
+          BACKEND_ARGS="-backend-config=bucket=${{ matrix.project.backend_bucket }} \
+            -backend-config=key=${{ matrix.project.backend_key }} \
+            -backend-config=region=${{ matrix.project.backend_region }}"
+          if [ -n "${{ matrix.project.backend_dynamodb_table }}" ]; then
+            BACKEND_ARGS="$BACKEND_ARGS -backend-config=dynamodb_table=${{ matrix.project.backend_dynamodb_table }}"
+          fi
+          terraform init $BACKEND_ARGS -reconfigure
+
+      - name: Select Terraform workspace
+        working-directory: ${{ matrix.project.dir }}
+        run: terraform workspace select -or-create ${{ matrix.project.workspace }}
+
+      - name: Terraform apply
+        id: apply
+        working-directory: ${{ matrix.project.dir }}
+        run: |
+          set +e
+          terraform apply -no-color -auto-approve tfplan 2>&1 | tee apply-output.txt
+          EXIT_CODE=${PIPESTATUS[0]}
+          echo "exit-code=${EXIT_CODE}" >> "$GITHUB_OUTPUT"
+          exit $EXIT_CODE
+
+      - name: Post apply result comment
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs')
+            const applyOutput = fs.existsSync('${{ matrix.project.dir }}/apply-output.txt')
+              ? fs.readFileSync('${{ matrix.project.dir }}/apply-output.txt', 'utf8')
+              : '(no apply output found)'
+            const exitCode = '${{ steps.apply.outputs.exit-code }}'
+            const success = exitCode === '0'
+            const icon = success ? '✅' : '❌'
+            const status = success ? 'succeeded' : 'failed'
+            const body = [
+              `${icon} **Terraform Apply \`${{ matrix.project.name }}\`** ${status} (triggered by @${{ inputs.commenter }})`,
+              '',
+              '<details><summary>Apply Output</summary>',
+              '',
+              '```',
+              applyOutput.slice(0, 60000),
+              '```',
+              '',
+              '</details>',
+            ].join('\n')
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: ${{ inputs.pr-number }},
+              body,
+            })
+
+  merge:
+    needs: apply
+    runs-on: ubuntu-latest
+    # Only merge when every apply matrix job succeeded
+    if: needs.apply.result == 'success'
+
+    steps:
+      - name: Post merge notice comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: ${{ inputs.pr-number }},
+              body: '✅ **All Terraform applies succeeded.** This PR will now be automatically merged and the source branch will be deleted.',
+            })
+
+      - name: Set apply-required status to success
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: '${{ inputs.head-sha }}',
+              state: 'success',
+              context: 'terraform/apply-required',
+              description: 'Terraform apply succeeded',
+            })
+
+      - name: Merge pull request
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.pulls.merge({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: ${{ inputs.pr-number }},
+              merge_method: 'squash',
+            })
+
+      - name: Delete source branch
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: ${{ inputs.pr-number }},
+            })
+            await github.rest.git.deleteRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: `heads/${pr.data.head.ref}`,
+            })
