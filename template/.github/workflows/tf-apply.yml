@@ -53,10 +53,21 @@ jobs:
           aws-region: ${{ matrix.project.aws_region }}
 
       - name: Download plan artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: tfplan-${{ matrix.project.name }}-${{ inputs.pr-number }}-${{ inputs.head-sha }}
-          path: ${{ matrix.project.dir }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ARTIFACT_NAME: tfplan-${{ matrix.project.name }}-${{ inputs.pr-number }}-${{ inputs.head-sha }}
+          DEST_DIR: ${{ matrix.project.dir }}
+          REPO: ${{ github.repository }}
+        run: |
+          ARTIFACT_ID=$(gh api "repos/${REPO}/actions/artifacts?name=${ARTIFACT_NAME}&per_page=1" \
+            --jq '.artifacts[0].id // empty')
+          if [ -z "$ARTIFACT_ID" ]; then
+            echo "::error::Plan artifact not found: ${ARTIFACT_NAME}"
+            echo "Run /tf plan on this PR before /tf apply."
+            exit 1
+          fi
+          gh api "repos/${REPO}/actions/artifacts/${ARTIFACT_ID}/zip" --output /tmp/tfplan.zip
+          unzip -o /tmp/tfplan.zip -d "${DEST_DIR}"
 
       - name: Terraform init
         working-directory: ${{ matrix.project.dir }}
