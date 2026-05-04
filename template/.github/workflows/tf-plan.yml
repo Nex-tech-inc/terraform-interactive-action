@@ -81,6 +81,7 @@ jobs:
           exit $EXIT_CODE
 
       - name: Upload plan artifact
+        id: upload
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -112,6 +113,7 @@ jobs:
           PROJECT_DIR: ${{ matrix.project.dir }}
           PLAN_EXIT_CODE: ${{ steps.plan.outputs.exit-code }}
           PR_NUMBER: ${{ inputs.pr-number }}
+          ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
         uses: actions/github-script@v7
         with:
           script: |
@@ -124,8 +126,10 @@ jobs:
             const icon = success ? '✅' : '❌'
             const status = success ? 'succeeded' : 'failed'
             const name = process.env.PROJECT_NAME
+            const artifactId = process.env.ARTIFACT_ID
+            const artifactLine = artifactId ? `\n<!-- tfplan-artifact-id:${artifactId} -->` : ''
             const body = [
-              `${icon} **Terraform Plan \`${name}\`** ${status}`,
+              `${icon} **Terraform Plan \`${name}\`** ${status}${artifactLine}`,
               '',
               '<details><summary>Plan Output</summary>',
               '',

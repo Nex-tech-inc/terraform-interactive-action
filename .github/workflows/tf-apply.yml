@@ -26,6 +26,7 @@ permissions:
   issues: write
   id-token: write
   statuses: write
+  actions: read
 
 jobs:
   apply:
@@ -58,16 +59,52 @@ jobs:
           ARTIFACT_NAME: tfplan-${{ matrix.project.name }}-${{ inputs.pr-number }}-${{ inputs.head-sha }}
           DEST_DIR: ${{ matrix.project.dir }}
           REPO: ${{ github.repository }}
-        run: |
-          ARTIFACT_ID=$(gh api "repos/${REPO}/actions/artifacts?name=${ARTIFACT_NAME}&per_page=1" \
-            --jq '.artifacts[0].id // empty')
-          if [ -z "$ARTIFACT_ID" ]; then
-            echo "::error::Plan artifact not found: ${ARTIFACT_NAME}"
-            echo "Run /tf plan on this PR before /tf apply."
-            exit 1
-          fi
-          gh api "repos/${REPO}/actions/artifacts/${ARTIFACT_ID}/zip" --output /tmp/tfplan.zip
-          unzip -o /tmp/tfplan.zip -d "${DEST_DIR}"
+          PR_NUMBER: ${{ inputs.pr-number }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { execSync } = require('child_process')
+            const fs = require('fs')
+
+            const artifactName = process.env.ARTIFACT_NAME
+            const destDir = process.env.DEST_DIR
+            const prNumber = parseInt(process.env.PR_NUMBER, 10)
+            const repo = process.env.REPO
+
+            // Search PR comments for the artifact ID left by the plan step
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+            })
+
+            // Find the most recent plan comment that has an artifact ID for this project
+            const projectName = artifactName.split('-')[1]
+            const artifactComment = [...comments].reverse().find(c =>
+              c.body.includes(`**Terraform Plan \`${projectName}\`**`) &&
+              c.body.includes('<!-- tfplan-artifact-id:')
+            )
+
+            if (!artifactComment) {
+              core.setFailed(`No plan artifact ID found in PR comments for project "${projectName}". Run /tf plan first.`)
+              return
+            }
+
+            const match = artifactComment.body.match(/<!-- tfplan-artifact-id:(\d+) -->/)
+            if (!match) {
+              core.setFailed(`Could not parse artifact ID from plan comment. Run /tf plan again.`)
+              return
+            }
+
+            const artifactId = match[1]
+            core.info(`Found artifact ID: ${artifactId}`)
+
+            execSync(
+              `gh api repos/${repo}/actions/artifacts/${artifactId}/zip --output /tmp/tfplan.zip`,
+              { env: { ...process.env } }
+            )
+            execSync(`unzip -o /tmp/tfplan.zip -d ${destDir}`)
+            core.info(`Downloaded and extracted artifact to ${destDir}`)
 
       - name: Terraform init
         working-directory: ${{ matrix.project.dir }}
@@ -87,9 +124,9 @@ jobs:
 
       - name: Select Terraform workspace
         working-directory: ${{ matrix.project.dir }}
-        env:
-          TF_WORKSPACE: ${{ matrix.project.workspace }}
-        run: terraform workspace select -or-create "$TF_WORKSPACE"
+        run: |
+          terraform workspace select "${{ matrix.project.workspace }}" || \
+          terraform workspace new "${{ matrix.project.workspace }}"
 
       - name: Terraform apply
         id: apply
