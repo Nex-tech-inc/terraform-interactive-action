@@ -10,6 +10,7 @@ permissions:
   issues: write
   statuses: write
   id-token: write
+  actions: read
 
 concurrency:
   group: tf-${{ github.event.issue.number }}
