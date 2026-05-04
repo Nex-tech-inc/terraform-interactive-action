@@ -5,10 +5,11 @@ on:
     types: [created]
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
   issues: write
   statuses: write
+  id-token: write
 
 concurrency:
   group: tf-${{ github.event.issue.number }}
