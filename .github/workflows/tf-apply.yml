@@ -100,11 +100,10 @@ jobs:
             core.info(`Found artifact ID: ${artifactId}`)
 
             execSync(
-              `gh api repos/${repo}/actions/artifacts/${artifactId}/zip --output /tmp/tfplan.zip`,
-              { env: { ...process.env } }
+              `gh api repos/${repo}/actions/artifacts/${artifactId}/zip > /tmp/tfplan.zip`,
+              { shell: true, env: { ...process.env } }
             )
-            execSync(`unzip -o /tmp/tfplan.zip -d ${destDir}`)
-            core.info(`Downloaded and extracted artifact to ${destDir}`)
+            execSync(`unzip -o /tmp/tfplan.zip -d "${destDir}"`, { shell: true })
       - name: Terraform init
         working-directory: ${{ matrix.project.dir }}
         env:
