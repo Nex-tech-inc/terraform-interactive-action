@@ -230,3 +230,61 @@ describe('main.js orchestration', () => {
     expect(mockCreateComment.mock.calls[0][0].body).toContain('nonexistent-project')
   })
 })
+
+describe('unlock command', () => {
+  test('sets action=unlock and returns all config projects', async () => {
+    const inputs = buildInputs({
+      'comment-body': '/tf unlock',
+      'changed-files': JSON.stringify(['README.md']), // no matching projects — doesn't matter for unlock
+    })
+    setupMocks(inputs)
+
+    await require('../main')
+
+    const actionOutput = mockSetOutput.mock.calls.find(([k]) => k === 'action')
+    expect(actionOutput[1]).toBe('unlock')
+
+    const projectsOutput = mockSetOutput.mock.calls.find(([k]) => k === 'projects')
+    expect(projectsOutput).toBeDefined()
+    const projects = JSON.parse(projectsOutput[1])
+    expect(projects.some((p) => p.name === 'network-prod')).toBe(true)
+    expect(projects.some((p) => p.name === 'app-staging')).toBe(true)
+
+    // unlock should NOT post a comment (the workflow handles messaging)
+    expect(mockCreateComment).not.toHaveBeenCalled()
+  })
+
+  test('/tf unlock <project> returns only the named project', async () => {
+    const inputs = buildInputs({
+      'comment-body': '/tf unlock app-staging',
+      'changed-files': JSON.stringify(['README.md']),
+    })
+    setupMocks(inputs)
+
+    await require('../main')
+
+    const actionOutput = mockSetOutput.mock.calls.find(([k]) => k === 'action')
+    expect(actionOutput[1]).toBe('unlock')
+
+    const projectsOutput = mockSetOutput.mock.calls.find(([k]) => k === 'projects')
+    const projects = JSON.parse(projectsOutput[1])
+    expect(projects).toHaveLength(1)
+    expect(projects[0].name).toBe('app-staging')
+    expect(mockCreateComment).not.toHaveBeenCalled()
+  })
+
+  test('/tf unlock with unknown project posts unknown-project comment', async () => {
+    const inputs = buildInputs({
+      'comment-body': '/tf unlock nonexistent-project',
+      'changed-files': JSON.stringify(['README.md']),
+    })
+    setupMocks(inputs)
+
+    await require('../main')
+
+    const actionOutput = mockSetOutput.mock.calls.find(([k]) => k === 'action')
+    expect(actionOutput[1]).toBe('none')
+    expect(mockCreateComment).toHaveBeenCalledTimes(1)
+    expect(mockCreateComment.mock.calls[0][0].body).toMatch(/Unknown project/i)
+  })
+})

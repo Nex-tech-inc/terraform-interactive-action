@@ -49,6 +49,29 @@ async function run() {
       return
     }
 
+    // 2b. Dispatch: unlock early — bypasses project file-change resolution
+    if (parsed.command === 'unlock') {
+      if (parsed.project) {
+        const raw = resolveExplicitProject(config, parsed.project)
+        if (!raw) {
+          await postComment(octokit, owner, repo, prNumber, renderUnknownProject(parsed.project))
+          core.setOutput('action', 'none')
+          return
+        }
+        core.setOutput('action', 'unlock')
+        core.setOutput('projects', JSON.stringify([mergeWithDefaults(config.defaults || {}, raw)]))
+        core.setOutput('pr-number', String(prNumber))
+        core.setOutput('commenter', commenter)
+        return
+      }
+      const allProjects = (config.projects || []).map((p) => mergeWithDefaults(config.defaults || {}, p))
+      core.setOutput('action', 'unlock')
+      core.setOutput('projects', JSON.stringify(allProjects))
+      core.setOutput('pr-number', String(prNumber))
+      core.setOutput('commenter', commenter)
+      return
+    }
+
     // 3. Resolve target projects
     let targetProjects = []
     if (parsed.project) {
