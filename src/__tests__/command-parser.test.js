@@ -70,4 +70,28 @@ describe('parseCommand', () => {
       valid: true,
     })
   })
+
+  test('parses /tf unlock with no project', () => {
+    expect(parseCommand('/tf unlock')).toEqual({
+      command: 'unlock',
+      project: null,
+      valid: true,
+      error: null,
+    })
+  })
+
+  test('parses /tf unlock with project name', () => {
+    expect(parseCommand('/tf unlock s3-bucket')).toEqual({
+      command: 'unlock',
+      project: 's3-bucket',
+      valid: true,
+      error: null,
+    })
+  })
+
+  test('rejects /tf unlock as part of existing error message check', () => {
+    // The error message should now mention unlock
+    const result = parseCommand('/tf destroy')
+    expect(result.error).toMatch(/Unrecognized command/)
+  })
 })

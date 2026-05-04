@@ -5,14 +5,14 @@
  */
 function parseCommand(body) {
   const firstLine = (body || '').split('\n').map((l) => l.trim()).find((l) => l.length > 0) || ''
-  const match = firstLine.match(/^\/tf\s+(plan|apply)(?:\s+(\S+))?$/i)
+  const match = firstLine.match(/^\/tf\s+(plan|apply|unlock)(?:\s+(\S+))?$/i)
 
   if (!match) {
     return {
       command: null,
       project: null,
       valid: false,
-      error: 'Unrecognized command. Supported: `/tf plan [project]`, `/tf apply [project]`',
+      error: 'Unrecognized command. Supported: `/tf plan [project]`, `/tf apply [project]`, `/tf unlock [project]`',
     }
   }
 
