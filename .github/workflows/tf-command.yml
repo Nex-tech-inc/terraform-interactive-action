@@ -133,3 +133,13 @@ jobs:
       head-sha: ${{ needs.dispatch.outputs.head-sha }}
       commenter: ${{ needs.dispatch.outputs.commenter }}
     secrets: inherit
+
+  unlock:
+    needs: dispatch
+    if: needs.dispatch.outputs.action == 'unlock'
+    uses: ./.github/workflows/tf-unlock.yml
+    with:
+      projects: ${{ needs.dispatch.outputs.projects }}
+      pr-number: ${{ needs.dispatch.outputs.pr-number }}
+      commenter: ${{ needs.dispatch.outputs.commenter }}
+    secrets: inherit
