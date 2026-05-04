@@ -10,9 +10,14 @@ inputs:
     description: 'Path to the .terraform-deployment config file'
     required: false
     default: '.terraform-deployment'
+  trigger:
+    description: 'What triggered this action: "comment" (default) or "autoplan"'
+    required: false
+    default: 'comment'
   comment-body:
-    description: 'Body of the PR comment that triggered this action'
-    required: true
+    description: 'Body of the PR comment that triggered this action (required when trigger is "comment")'
+    required: false
+    default: ''
   pr-number:
     description: 'Pull request number'
     required: true
@@ -31,7 +36,7 @@ inputs:
     required: false
     default: '[]'
   commenter:
-    description: 'GitHub username of the person who posted the comment'
+    description: 'GitHub username who triggered this action (comment author or PR author)'
     required: true
 
 outputs:
