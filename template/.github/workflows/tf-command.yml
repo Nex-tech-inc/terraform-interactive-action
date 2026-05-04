@@ -1,0 +1,121 @@
+name: Terraform Command
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+  statuses: write
+
+concurrency:
+  group: tf-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    # Only run when the comment is on a PR and starts with /tf
+    if: >
+      github.event.issue.pull_request != null &&
+      startsWith(github.event.comment.body, '/tf ')
+    runs-on: ubuntu-latest
+    outputs:
+      action: ${{ steps.control.outputs.action }}
+      projects: ${{ steps.control.outputs.projects }}
+      pr-number: ${{ steps.control.outputs.pr-number }}
+      head-sha: ${{ steps.control.outputs.head-sha }}
+      commenter: ${{ steps.control.outputs.commenter }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Gather PR metadata
+        id: pr-meta
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.issue.number
+
+            // Fetch PR head SHA
+            const pr = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+            })
+            core.setOutput('head-sha', pr.data.head.sha)
+
+            // Fetch changed files
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+            })
+            core.setOutput('changed-files', JSON.stringify(files.map(f => f.filename)))
+
+            // Fetch approved reviewers — deduplicate by reviewer, keep only latest state
+            const reviews = await github.paginate(github.rest.pulls.listReviews, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: prNumber,
+            })
+            const latestReviews = new Map()
+            for (const r of reviews) {
+              latestReviews.set(r.user.login, r.state)
+            }
+            const approved = [...latestReviews.entries()]
+              .filter(([, state]) => state === 'APPROVED')
+              .map(([login]) => login)
+            core.setOutput('approved-reviewers', JSON.stringify(approved))
+
+            // Fetch CODEOWNERS (try root, then .github/, then docs/)
+            let codeowners = ''
+            for (const path of ['CODEOWNERS', '.github/CODEOWNERS', 'docs/CODEOWNERS']) {
+              try {
+                const res = await github.rest.repos.getContent({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  path,
+                })
+                codeowners = Buffer.from(res.data.content, 'base64').toString()
+                break
+              } catch {}
+            }
+            core.setOutput('codeowners-content', codeowners)
+
+      - name: Run control action
+        id: control
+        uses: Nex-tech-inc/terraform-interactive-action@main
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          config-path: .terraform-deployment
+          comment-body: ${{ github.event.comment.body }}
+          pr-number: ${{ github.event.issue.number }}
+          head-sha: ${{ steps.pr-meta.outputs.head-sha }}
+          changed-files: ${{ steps.pr-meta.outputs.changed-files }}
+          codeowners-content: ${{ steps.pr-meta.outputs.codeowners-content }}
+          approved-reviewers: ${{ steps.pr-meta.outputs.approved-reviewers }}
+          commenter: ${{ github.event.comment.user.login }}
+
+  plan:
+    needs: dispatch
+    if: needs.dispatch.outputs.action == 'plan'
+    uses: ./.github/workflows/tf-plan.yml
+    with:
+      projects: ${{ needs.dispatch.outputs.projects }}
+      pr-number: ${{ needs.dispatch.outputs.pr-number }}
+      head-sha: ${{ needs.dispatch.outputs.head-sha }}
+    secrets: inherit
+
+  apply:
+    needs: dispatch
+    if: needs.dispatch.outputs.action == 'apply'
+    uses: ./.github/workflows/tf-apply.yml
+    with:
+      projects: ${{ needs.dispatch.outputs.projects }}
+      pr-number: ${{ needs.dispatch.outputs.pr-number }}
+      head-sha: ${{ needs.dispatch.outputs.head-sha }}
+      commenter: ${{ needs.dispatch.outputs.commenter }}
+    secrets: inherit
