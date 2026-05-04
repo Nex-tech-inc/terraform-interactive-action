@@ -9,7 +9,6 @@ permissions:
   pull-requests: write
   issues: write
   statuses: write
-  reactions: write
 
 concurrency:
   group: tf-${{ github.event.issue.number }}
