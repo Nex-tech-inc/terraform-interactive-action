@@ -1,0 +1,38 @@
+# .terraform-deployment
+# Atlantis-inspired Terraform deployment config for terraform-deploy-action.
+# Copy this file to .terraform-deployment (no .yaml extension) in your repo root.
+
+version: 1
+
+defaults:
+  terraform_version: 1.9.0
+  aws_region: us-east-1
+  backend:
+    bucket: my-org-terraform-state
+    dynamodb_table: terraform-locks
+  policies:
+    require_apply_before_merge: true
+
+projects:
+  - name: network-prod
+    dir: infra/network/prod
+    when_modified:
+      - infra/network/**
+      - modules/vpc/**
+    workspace: default
+    backend:
+      key: network/prod.tfstate
+    deploy:
+      role_arn: arn:aws:iam::111111111111:role/github-terraform-prod
+      account_id: "111111111111"
+      aws_region: us-east-1
+
+  - name: app-staging
+    dir: infra/app/staging
+    # when_modified omitted: defaults to infra/app/staging/**
+    backend:
+      key: app/staging.tfstate
+    deploy:
+      role_arn: arn:aws:iam::222222222222:role/github-terraform-staging
+      account_id: "222222222222"
+      aws_region: us-east-1
