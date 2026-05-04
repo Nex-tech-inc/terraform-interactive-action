@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Atlantis-inspired Terraform plan/apply orchestrator for GitHub Actions",
   "main": "src/main.js",
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
     "build": "ncc build src/main.js -o dist --source-map --license licenses.txt",
     "test": "jest --coverage",
