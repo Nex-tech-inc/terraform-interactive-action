@@ -57,6 +57,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ARTIFACT_NAME: tfplan-${{ matrix.project.name }}-${{ inputs.pr-number }}-${{ inputs.head-sha }}
+          PROJECT_NAME: ${{ matrix.project.name }}
           DEST_DIR: ${{ matrix.project.dir }}
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ inputs.pr-number }}
@@ -66,10 +67,10 @@ jobs:
             const { execSync } = require('child_process')
             const fs = require('fs')
 
-            const artifactName = process.env.ARTIFACT_NAME
             const destDir = process.env.DEST_DIR
             const prNumber = parseInt(process.env.PR_NUMBER, 10)
             const repo = process.env.REPO
+            const projectName = process.env.PROJECT_NAME
 
             // Search PR comments for the artifact ID left by the plan step
             const comments = await github.paginate(github.rest.issues.listComments, {
@@ -79,7 +80,6 @@ jobs:
             })
 
             // Find the most recent plan comment that has an artifact ID for this project
-            const projectName = artifactName.split('-')[1]
             const artifactComment = [...comments].reverse().find(c =>
               c.body.includes(`**Terraform Plan \`${projectName}\`**`) &&
               c.body.includes('<!-- tfplan-artifact-id:')
@@ -105,7 +105,6 @@ jobs:
             )
             execSync(`unzip -o /tmp/tfplan.zip -d ${destDir}`)
             core.info(`Downloaded and extracted artifact to ${destDir}`)
-
       - name: Terraform init
         working-directory: ${{ matrix.project.dir }}
         env:
