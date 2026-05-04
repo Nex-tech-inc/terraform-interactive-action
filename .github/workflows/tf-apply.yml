@@ -53,6 +53,56 @@ jobs:
           role-to-assume: ${{ matrix.project.role_arn }}
           aws-region: ${{ matrix.project.aws_region }}
 
+      - name: Verify lock ownership
+        env:
+          PROJECT_NAME: ${{ matrix.project.name }}
+          PR_NUMBER: ${{ inputs.pr-number }}
+          BACKEND_BUCKET: ${{ matrix.project.backend_bucket }}
+        run: |
+          set -e
+          LOCK_KEY="locks/${PROJECT_NAME}.lock"
+          LOCK_FILE="/tmp/tf-lock.json"
+
+          if ! aws s3api get-object \
+              --bucket "$BACKEND_BUCKET" \
+              --key "$LOCK_KEY" \
+              "$LOCK_FILE" 2>/dev/null; then
+            echo "LOCK_MISMATCH=true" >> "$GITHUB_ENV"
+            exit 0
+          fi
+
+          EXISTING_PR=$(jq -r '.pr_number' "$LOCK_FILE")
+          if [ "$EXISTING_PR" != "$PR_NUMBER" ]; then
+            echo "LOCK_MISMATCH=true" >> "$GITHUB_ENV"
+            echo "LOCK_PR=${EXISTING_PR}" >> "$GITHUB_ENV"
+            echo "LOCK_BY=$(jq -r '.locked_by' "$LOCK_FILE")" >> "$GITHUB_ENV"
+          fi
+
+      - name: Fail if lock not owned by this PR
+        if: env.LOCK_MISMATCH == 'true'
+        env:
+          PROJECT_NAME: ${{ matrix.project.name }}
+          PR_NUMBER: ${{ inputs.pr-number }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const name = process.env.PROJECT_NAME
+            const prNumber = parseInt(process.env.PR_NUMBER, 10)
+            const lockPr = process.env.LOCK_PR || 'unknown'
+            const lockBy = process.env.LOCK_BY || 'unknown'
+
+            const reason = lockPr === 'unknown'
+              ? `No lock found for \`${name}\`. Run \`/tf plan\` on this PR before applying.`
+              : `Lock is held by PR #${lockPr} (@${lockBy}). Run \`/tf plan\` on this PR to acquire the lock.`
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: `⚠️ **Apply blocked for \`${name}\`**: ${reason}`,
+            })
+            core.setFailed(`Lock mismatch for project "${name}"`)
+
       - name: Download plan artifact
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -135,6 +185,17 @@ jobs:
           EXIT_CODE=${PIPESTATUS[0]}
           echo "exit-code=${EXIT_CODE}" >> "$GITHUB_OUTPUT"
           exit $EXIT_CODE
+
+      - name: Release project lock
+        if: steps.apply.outputs.exit-code == '0'
+        env:
+          PROJECT_NAME: ${{ matrix.project.name }}
+          BACKEND_BUCKET: ${{ matrix.project.backend_bucket }}
+        run: |
+          aws s3api delete-object \
+            --bucket "$BACKEND_BUCKET" \
+            --key "locks/${PROJECT_NAME}.lock"
+          echo "Lock released for project ${PROJECT_NAME}."
 
       - name: Post apply result comment
         if: always()
