@@ -15,6 +15,10 @@ on:
         description: 'Head commit SHA to check out and key artifacts against'
         required: true
         type: string
+      commenter:
+        description: 'GitHub username who triggered the plan (for lock attribution)'
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -47,6 +51,92 @@ jobs:
         with:
           role-to-assume: ${{ matrix.project.role_arn }}
           aws-region: ${{ matrix.project.aws_region }}
+
+      - name: Acquire project lock
+        id: lock-acquire
+        env:
+          PROJECT_NAME: ${{ matrix.project.name }}
+          PR_NUMBER: ${{ inputs.pr-number }}
+          HEAD_SHA: ${{ inputs.head-sha }}
+          COMMENTER: ${{ inputs.commenter }}
+          BACKEND_BUCKET: ${{ matrix.project.backend_bucket }}
+        run: |
+          set -e
+          LOCK_KEY="locks/${PROJECT_NAME}.lock"
+          LOCK_FILE="/tmp/tf-lock.json"
+          NEW_LOCK_FILE="/tmp/tf-new-lock.json"
+
+          cat > "$NEW_LOCK_FILE" <<EOF
+          {
+            "pr_number": ${PR_NUMBER},
+            "head_sha": "${HEAD_SHA}",
+            "locked_by": "${COMMENTER}",
+            "locked_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "repo": "${GITHUB_REPOSITORY}"
+          }
+          EOF
+
+          if aws s3api get-object \
+              --bucket "$BACKEND_BUCKET" \
+              --key "$LOCK_KEY" \
+              "$LOCK_FILE" 2>/dev/null; then
+            EXISTING_PR=$(jq -r '.pr_number' "$LOCK_FILE")
+            if [ "$EXISTING_PR" = "$PR_NUMBER" ]; then
+              echo "Lock already owned by this PR. Re-plan allowed."
+              exit 0
+            fi
+            # Blocked by another PR
+            {
+              echo "LOCK_BLOCKED=true"
+              echo "LOCK_PR=$(jq -r '.pr_number' "$LOCK_FILE")"
+              echo "LOCK_BY=$(jq -r '.locked_by' "$LOCK_FILE")"
+              echo "LOCK_AT=$(jq -r '.locked_at' "$LOCK_FILE")"
+            } >> "$GITHUB_ENV"
+            exit 0
+          fi
+
+          # No existing lock — acquire with conditional write (avoids race condition)
+          if ! aws s3api put-object \
+              --bucket "$BACKEND_BUCKET" \
+              --key "$LOCK_KEY" \
+              --body "$NEW_LOCK_FILE" \
+              --if-none-match "*" 2>/dev/null; then
+            # Race condition: another plan acquired simultaneously — re-read and report blocked
+            aws s3api get-object --bucket "$BACKEND_BUCKET" --key "$LOCK_KEY" "$LOCK_FILE" 2>/dev/null || true
+            {
+              echo "LOCK_BLOCKED=true"
+              echo "LOCK_PR=$(jq -r '.pr_number' "$LOCK_FILE" 2>/dev/null || echo unknown)"
+              echo "LOCK_BY=$(jq -r '.locked_by' "$LOCK_FILE" 2>/dev/null || echo unknown)"
+              echo "LOCK_AT=$(jq -r '.locked_at' "$LOCK_FILE" 2>/dev/null || echo unknown)"
+            } >> "$GITHUB_ENV"
+            exit 0
+          fi
+
+          echo "Lock acquired for PR #${PR_NUMBER} on project ${PROJECT_NAME}."
+
+      - name: Fail if project is locked by another PR
+        if: env.LOCK_BLOCKED == 'true'
+        env:
+          PROJECT_NAME: ${{ matrix.project.name }}
+          PR_NUMBER: ${{ inputs.pr-number }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const name = process.env.PROJECT_NAME
+            const lockPr = process.env.LOCK_PR
+            const lockBy = process.env.LOCK_BY
+            const lockAt = process.env.LOCK_AT
+            const prNumber = parseInt(process.env.PR_NUMBER, 10)
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body:
+                `🔒 **Project \`${name}\` is locked by PR #${lockPr}** (@${lockBy}, since ${lockAt}).\n\n` +
+                `Run \`/tf unlock\` in this PR to steal the lock if that PR is abandoned.`,
+            })
+            core.setFailed(`Project "${name}" is locked by PR #${lockPr}`)
 
       - name: Terraform init
         working-directory: ${{ matrix.project.dir }}

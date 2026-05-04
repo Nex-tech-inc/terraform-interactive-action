@@ -1,0 +1,96 @@
+name: Terraform Cleanup
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  id-token: write
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  cleanup-locks:
+    name: Release Terraform Locks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Parse .terraform-deployment config
+        id: parse-config
+        run: |
+          set -e
+          CONFIG_FILE=".terraform-deployment"
+          if [ ! -f "$CONFIG_FILE" ]; then
+            echo "No .terraform-deployment found. Nothing to clean up."
+            echo "projects=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Merge per-project values with defaults into a flat structure matching
+          # the execution-payload format used by tf-plan/tf-apply.
+          DEFAULTS=$(yq -o=json '.defaults // {}' "$CONFIG_FILE")
+          PROJECTS_RAW=$(yq -o=json '.projects' "$CONFIG_FILE")
+          PROJECTS=$(echo "$PROJECTS_RAW" | jq --argjson d "$DEFAULTS" '[.[] | {
+            name: .name,
+            role_arn: (.deploy.role_arn // $d.deploy.role_arn // ""),
+            aws_region: (.deploy.aws_region // $d.aws_region // "us-east-1"),
+            backend_bucket: (.backend.bucket // $d.backend.bucket // "")
+          }]')
+          echo "projects=${PROJECTS}" >> "$GITHUB_OUTPUT"
+
+      - name: Configure AWS credentials via OIDC
+        if: steps.parse-config.outputs.projects != '' && steps.parse-config.outputs.projects != 'null'
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ fromJson(steps.parse-config.outputs.projects)[0].role_arn }}
+          aws-region: ${{ fromJson(steps.parse-config.outputs.projects)[0].aws_region }}
+
+      - name: Release locks owned by this PR
+        if: steps.parse-config.outputs.projects != '' && steps.parse-config.outputs.projects != 'null'
+        id: release-locks
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PROJECTS_JSON: ${{ steps.parse-config.outputs.projects }}
+        run: |
+          RELEASED=""
+          # Use process substitution (not pipe) to avoid subshell — preserves RELEASED variable
+          while IFS=$'\t' read -r name bucket; do
+            LOCK_KEY="locks/${name}.lock"
+            LOCK_FILE="/tmp/tf-lock-${name}.json"
+
+            if aws s3api get-object --bucket "$bucket" --key "$LOCK_KEY" "$LOCK_FILE" 2>/dev/null; then
+              LOCK_PR=$(jq -r '.pr_number' "$LOCK_FILE")
+              if [ "$LOCK_PR" = "$PR_NUMBER" ]; then
+                aws s3api delete-object --bucket "$bucket" --key "$LOCK_KEY"
+                RELEASED="${RELEASED}${name},"
+                echo "Released lock for project ${name} (owned by PR #${PR_NUMBER})"
+              else
+                echo "Skipping project ${name}: lock owned by PR #${LOCK_PR}"
+              fi
+            else
+              echo "No lock found for project ${name}"
+            fi
+          done < <(echo "$PROJECTS_JSON" | jq -r '.[] | [.name, .backend_bucket] | @tsv')
+          echo "released=${RELEASED%,}" >> "$GITHUB_OUTPUT"
+
+      - name: Post cleanup comment
+        if: steps.release-locks.outputs.released != ''
+        uses: actions/github-script@v7
+        env:
+          RELEASED: ${{ steps.release-locks.outputs.released }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        with:
+          script: |
+            const released = process.env.RELEASED
+            const prNumber = parseInt(process.env.PR_NUMBER, 10)
+            if (!released) return
+
+            const projectList = released.split(',').filter(Boolean).map(p => `\`${p}\``).join(', ')
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: `🧹 **Terraform locks released** for projects: ${projectList} (PR closed).`,
+            })
