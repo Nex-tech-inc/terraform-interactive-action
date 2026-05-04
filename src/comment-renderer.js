@@ -68,6 +68,28 @@ function renderApplyFailed(projectName, error) {
   )
 }
 
+function renderLockBlocked(projectName, lockPrNumber, lockedBy, lockedAt) {
+  return (
+    `🔒 **Project \`${projectName}\` is locked by PR #${lockPrNumber}** (@${lockedBy}, since ${lockedAt}).\n\n` +
+    `Run \`/tf unlock\` in this PR to steal the lock if that PR is abandoned.`
+  )
+}
+
+function renderUnlockResult(releasedProjects, commenter) {
+  if (releasedProjects.length === 0) {
+    return `🔓 **Terraform Unlock** by @${commenter}: No active locks found — nothing to release.`
+  }
+  const names = releasedProjects.map((p) => `\`${p}\``).join(', ')
+  return `🔓 **Terraform Unlock** by @${commenter}: Released locks for ${names}.`
+}
+
+function renderLockMismatch(projectName) {
+  return (
+    `⚠️ **Lock mismatch for \`${projectName}\`**: This PR does not own the current lock.\n\n` +
+    `Run \`/tf plan\` on this PR to acquire the lock before applying.`
+  )
+}
+
 module.exports = {
   renderPlanQueued,
   renderApplyBlocked,
@@ -79,4 +101,7 @@ module.exports = {
   renderConfigError,
   renderPlanShow,
   renderApplyFailed,
+  renderLockBlocked,
+  renderUnlockResult,
+  renderLockMismatch,
 }

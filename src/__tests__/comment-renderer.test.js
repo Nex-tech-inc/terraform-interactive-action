@@ -9,6 +9,9 @@ const {
   renderConfigError,
   renderPlanShow,
   renderApplyFailed,
+  renderLockBlocked,
+  renderUnlockResult,
+  renderLockMismatch,
 } = require('../comment-renderer')
 
 const PROJECT = { name: 'network-prod' }
@@ -100,5 +103,38 @@ describe('renderApplyFailed', () => {
   })
   test('says the PR will not be merged', () => {
     expect(renderApplyFailed('x', 'err')).toMatch(/not be merged/i)
+  })
+})
+
+describe('renderLockBlocked', () => {
+  test('includes project name, PR number, locker, and timestamp', () => {
+    const result = renderLockBlocked('s3-bucket', 42, 'alice', '2026-05-04T18:00:00Z')
+    expect(result).toContain('s3-bucket')
+    expect(result).toContain('#42')
+    expect(result).toContain('@alice')
+    expect(result).toContain('2026-05-04T18:00:00Z')
+    expect(result).toContain('/tf unlock')
+  })
+})
+
+describe('renderUnlockResult', () => {
+  test('lists released projects and commenter', () => {
+    const result = renderUnlockResult(['s3-bucket', 'vpc'], 'bob')
+    expect(result).toContain('s3-bucket')
+    expect(result).toContain('vpc')
+    expect(result).toContain('@bob')
+  })
+
+  test('handles empty list (nothing to unlock)', () => {
+    const result = renderUnlockResult([], 'bob')
+    expect(result).toContain('No active locks')
+  })
+})
+
+describe('renderLockMismatch', () => {
+  test('includes project name and run /tf plan instruction', () => {
+    const result = renderLockMismatch('s3-bucket')
+    expect(result).toContain('s3-bucket')
+    expect(result).toContain('/tf plan')
   })
 })
