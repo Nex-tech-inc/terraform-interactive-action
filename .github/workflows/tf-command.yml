@@ -9,6 +9,7 @@ permissions:
   pull-requests: write
   issues: write
   statuses: write
+  reactions: write
 
 concurrency:
   group: tf-${{ github.event.issue.number }}
@@ -29,6 +30,17 @@ jobs:
       commenter: ${{ steps.control.outputs.commenter }}
 
     steps:
+      - name: Acknowledge command with eyes reaction
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.reactions.createForIssueComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: context.payload.comment.id,
+              content: 'eyes',
+            })
+
       - name: Check out repository
         uses: actions/checkout@v4
 
