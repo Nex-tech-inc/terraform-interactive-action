@@ -16,6 +16,8 @@ function buildPlanPayload(resolvedProjects) {
     backend_dynamodb_table: p.backend.dynamodb_table || '',
     role_arn: p.deploy.role_arn,
     aws_region: p.deploy.aws_region,
+    // Policy flags passed through to let apply workflow honour per-project config
+    require_merge_after_apply: p.policies?.require_apply_before_merge !== false,
   }))
 }
 

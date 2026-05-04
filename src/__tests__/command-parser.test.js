@@ -37,19 +37,10 @@ describe('parseCommand', () => {
     })
   })
 
-  test('parses /tf show with project name', () => {
-    expect(parseCommand('/tf show network-prod')).toEqual({
-      command: 'show',
-      project: 'network-prod',
-      valid: true,
-      error: null,
-    })
-  })
-
-  test('rejects /tf show without a project name', () => {
-    const result = parseCommand('/tf show')
+  test('rejects /tf show (not implemented)', () => {
+    const result = parseCommand('/tf show network-prod')
     expect(result.valid).toBe(false)
-    expect(result.error).toMatch(/requires a project name/)
+    expect(result.error).toMatch(/Unrecognized command/)
   })
 
   test('rejects unsupported subcommand', () => {
@@ -70,5 +61,13 @@ describe('parseCommand', () => {
 
   test('trims surrounding whitespace', () => {
     expect(parseCommand('  /tf plan  ')).toMatchObject({ command: 'plan', project: null, valid: true })
+  })
+
+  test('parses /tf plan from first line of multi-line comment', () => {
+    expect(parseCommand('/tf plan network-prod\n\n(some note)')).toMatchObject({
+      command: 'plan',
+      project: 'network-prod',
+      valid: true,
+    })
   })
 })

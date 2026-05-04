@@ -20,6 +20,9 @@ const RESOLVED_PROJECT = {
     account_id: '111111111111',
     aws_region: 'us-east-1',
   },
+  policies: {
+    require_apply_before_merge: true,
+  },
 }
 
 describe('buildPlanPayload', () => {
@@ -36,7 +39,20 @@ describe('buildPlanPayload', () => {
       backend_dynamodb_table: 'terraform-locks',
       role_arn: 'arn:aws:iam::111111111111:role/github-terraform-prod',
       aws_region: 'us-east-1',
+      require_merge_after_apply: true,
     })
+  })
+
+  test('require_merge_after_apply defaults to true when policies absent', () => {
+    const project = { ...RESOLVED_PROJECT, policies: undefined }
+    const [payload] = buildPlanPayload([project])
+    expect(payload.require_merge_after_apply).toBe(true)
+  })
+
+  test('require_merge_after_apply is false when policy explicitly disabled', () => {
+    const project = { ...RESOLVED_PROJECT, policies: { require_apply_before_merge: false } }
+    const [payload] = buildPlanPayload([project])
+    expect(payload.require_merge_after_apply).toBe(false)
   })
 
   test('handles empty dynamodb_table as empty string', () => {

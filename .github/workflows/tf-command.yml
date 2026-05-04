@@ -8,8 +8,11 @@ permissions:
   contents: read
   pull-requests: write
   issues: write
-  id-token: write
   statuses: write
+
+concurrency:
+  group: tf-${{ github.event.issue.number }}
+  cancel-in-progress: false
 
 jobs:
   dispatch:
@@ -52,15 +55,19 @@ jobs:
             })
             core.setOutput('changed-files', JSON.stringify(files.map(f => f.filename)))
 
-            // Fetch approved reviewers
+            // Fetch approved reviewers — deduplicate by reviewer, keep only latest state
             const reviews = await github.paginate(github.rest.pulls.listReviews, {
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number: prNumber,
             })
-            const approved = reviews
-              .filter(r => r.state === 'APPROVED')
-              .map(r => r.user.login)
+            const latestReviews = new Map()
+            for (const r of reviews) {
+              latestReviews.set(r.user.login, r.state)
+            }
+            const approved = [...latestReviews.entries()]
+              .filter(([, state]) => state === 'APPROVED')
+              .map(([login]) => login)
             core.setOutput('approved-reviewers', JSON.stringify(approved))
 
             // Fetch CODEOWNERS (try root, then .github/, then docs/)

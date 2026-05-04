@@ -45,6 +45,8 @@ Each project's `deploy.role_arn` must reference an IAM role that trusts GitHub A
 
 In your repository settings, add a branch protection rule for your default branch that requires the `terraform/apply-required` status check to pass before merging. This prevents merging before apply.
 
+> **Note:** The `terraform/apply-required` status check is set to `pending` when `/tf plan` succeeds and resolved to `success` after `/tf apply` succeeds. This action is designed for **Terraform-only infrastructure repositories** where every PR is expected to contain Terraform changes. If your repository has PRs that do not touch Terraform (e.g. documentation), those PRs will have a permanently `pending` `terraform/apply-required` status. In that case, either exclude those PRs using per-file status check rules or configure `require_apply_before_merge: false` in your `.terraform-deployment` config.
+
 ### 5. Add CODEOWNERS
 
 Define a `CODEOWNERS` file at the repository root, `.github/CODEOWNERS`, or `docs/CODEOWNERS`. Owners assigned to a project's directory must approve the PR before `/tf apply` is allowed.
