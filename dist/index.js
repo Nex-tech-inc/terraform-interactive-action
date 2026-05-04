@@ -34437,14 +34437,14 @@ module.exports = {
  */
 function parseCommand(body) {
   const firstLine = (body || '').split('\n').map((l) => l.trim()).find((l) => l.length > 0) || ''
-  const match = firstLine.match(/^\/tf\s+(plan|apply)(?:\s+(\S+))?$/i)
+  const match = firstLine.match(/^\/tf\s+(plan|apply|unlock)(?:\s+(\S+))?$/i)
 
   if (!match) {
     return {
       command: null,
       project: null,
       valid: false,
-      error: 'Unrecognized command. Supported: `/tf plan [project]`, `/tf apply [project]`',
+      error: 'Unrecognized command. Supported: `/tf plan [project]`, `/tf apply [project]`, `/tf unlock [project]`',
     }
   }
 
@@ -34532,6 +34532,28 @@ function renderApplyFailed(projectName, error) {
   )
 }
 
+function renderLockBlocked(projectName, lockPrNumber, lockedBy, lockedAt) {
+  return (
+    `🔒 **Project \`${projectName}\` is locked by PR #${lockPrNumber}** (@${lockedBy}, since ${lockedAt}).\n\n` +
+    `Run \`/tf unlock\` in this PR to steal the lock if that PR is abandoned.`
+  )
+}
+
+function renderUnlockResult(releasedProjects, commenter) {
+  if (releasedProjects.length === 0) {
+    return `🔓 **Terraform Unlock** by @${commenter}: No active locks found — nothing to release.`
+  }
+  const names = releasedProjects.map((p) => `\`${p}\``).join(', ')
+  return `🔓 **Terraform Unlock** by @${commenter}: Released locks for ${names}.`
+}
+
+function renderLockMismatch(projectName) {
+  return (
+    `⚠️ **Lock mismatch for \`${projectName}\`**: This PR does not own the current lock.\n\n` +
+    `Run \`/tf plan\` on this PR to acquire the lock before applying.`
+  )
+}
+
 module.exports = {
   renderPlanQueued,
   renderApplyBlocked,
@@ -34543,6 +34565,9 @@ module.exports = {
   renderConfigError,
   renderPlanShow,
   renderApplyFailed,
+  renderLockBlocked,
+  renderUnlockResult,
+  renderLockMismatch,
 }
 
 
@@ -34769,6 +34794,29 @@ async function run() {
     } catch (err) {
       await postComment(octokit, owner, repo, prNumber, renderConfigError(err.message))
       core.setOutput('action', 'none')
+      return
+    }
+
+    // 2b. Dispatch: unlock early — bypasses project file-change resolution
+    if (parsed.command === 'unlock') {
+      if (parsed.project) {
+        const raw = resolveExplicitProject(config, parsed.project)
+        if (!raw) {
+          await postComment(octokit, owner, repo, prNumber, renderUnknownProject(parsed.project))
+          core.setOutput('action', 'none')
+          return
+        }
+        core.setOutput('action', 'unlock')
+        core.setOutput('projects', JSON.stringify([mergeWithDefaults(config.defaults || {}, raw)]))
+        core.setOutput('pr-number', String(prNumber))
+        core.setOutput('commenter', commenter)
+        return
+      }
+      const allProjects = (config.projects || []).map((p) => mergeWithDefaults(config.defaults || {}, p))
+      core.setOutput('action', 'unlock')
+      core.setOutput('projects', JSON.stringify(allProjects))
+      core.setOutput('pr-number', String(prNumber))
+      core.setOutput('commenter', commenter)
       return
     }
 
