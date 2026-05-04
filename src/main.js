@@ -128,4 +128,4 @@ async function postComment(octokit, owner, repo, prNumber, body) {
   })
 }
 
-run()
+module.exports = run()
