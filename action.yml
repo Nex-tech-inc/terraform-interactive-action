@@ -1,0 +1,53 @@
+name: 'Terraform Deploy Action'
+description: 'Atlantis-inspired PR-driven Terraform plan/apply orchestration for AWS'
+author: 'Your Org'
+
+inputs:
+  github-token:
+    description: 'GitHub token with pull-requests:write and statuses:write permissions'
+    required: true
+  config-path:
+    description: 'Path to the .terraform-deployment config file'
+    required: false
+    default: '.terraform-deployment'
+  comment-body:
+    description: 'Body of the PR comment that triggered this action'
+    required: true
+  pr-number:
+    description: 'Pull request number'
+    required: true
+  head-sha:
+    description: 'Head commit SHA of the pull request'
+    required: true
+  changed-files:
+    description: 'JSON array of file paths changed in this PR'
+    required: true
+  codeowners-content:
+    description: 'Full content of the CODEOWNERS file (empty string if absent)'
+    required: false
+    default: ''
+  approved-reviewers:
+    description: 'JSON array of GitHub usernames who approved the PR'
+    required: false
+    default: '[]'
+  commenter:
+    description: 'GitHub username of the person who posted the comment'
+    required: true
+
+outputs:
+  action:
+    description: 'Resolved action: plan | apply | show | blocked | none'
+  projects:
+    description: 'JSON array of resolved project execution payloads'
+  blocked-projects:
+    description: 'JSON array of blocked project names and reasons (when action=blocked)'
+  pr-number:
+    description: 'Pull request number (passed through)'
+  head-sha:
+    description: 'Head commit SHA (passed through)'
+  commenter:
+    description: 'Commenter username (passed through)'
+
+runs:
+  using: 'node20'
+  main: 'dist/index.js'
