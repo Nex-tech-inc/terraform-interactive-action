@@ -11,7 +11,7 @@ inputs:
     required: false
     default: '.terraform-deployment'
   trigger:
-    description: 'What triggered this action: "comment" (default) or "autoplan"'
+    description: 'What triggered this action. Accepted values: "comment" (default) or "autoplan". Any other value is treated as "comment".'
     required: false
     default: 'comment'
   comment-body:
