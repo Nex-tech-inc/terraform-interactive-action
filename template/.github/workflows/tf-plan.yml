@@ -201,6 +201,7 @@ jobs:
         env:
           PROJECT_NAME: ${{ matrix.project.name }}
           PROJECT_DIR: ${{ matrix.project.dir }}
+          PROJECT_WORKSPACE: ${{ matrix.project.workspace }}
           PLAN_EXIT_CODE: ${{ steps.plan.outputs.exit-code }}
           PR_NUMBER: ${{ inputs.pr-number }}
           ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
@@ -208,27 +209,69 @@ jobs:
         with:
           script: |
             const fs = require('fs')
+            const name = process.env.PROJECT_NAME
             const dir = process.env.PROJECT_DIR
+            const workspace = process.env.PROJECT_WORKSPACE
+            const artifactId = process.env.ARTIFACT_ID
+            const success = process.env.PLAN_EXIT_CODE === '0'
+            const icon = success ? '✅' : '❌'
+
             const planOutput = fs.existsSync(`${dir}/plan-output.txt`)
               ? fs.readFileSync(`${dir}/plan-output.txt`, 'utf8')
               : '(no plan output found)'
-            const success = process.env.PLAN_EXIT_CODE === '0'
-            const icon = success ? '✅' : '❌'
-            const status = success ? 'succeeded' : 'failed'
-            const name = process.env.PROJECT_NAME
-            const artifactId = process.env.ARTIFACT_ID
-            const artifactLine = artifactId ? `\n<!-- tfplan-artifact-id:${artifactId} -->` : ''
+
+            // Extract "Plan: X to add, Y to change, Z to destroy." summary line
+            const summaryMatch = planOutput.match(/^(Plan:.*|No changes\..*)$/m)
+            const summary = summaryMatch ? summaryMatch[0] : ''
+
+            const artifactComment = artifactId ? `\n<!-- tfplan-artifact-id:${artifactId} -->` : ''
+
             const body = [
-              `${icon} **Terraform Plan \`${name}\`** ${status}${artifactLine}`,
+              `${icon} Ran Plan for project: \`${name}\` dir: \`${dir}\` workspace: \`${workspace}\`${artifactComment}`,
               '',
-              '<details><summary>Plan Output</summary>',
+              '<details><summary>▶ Show Output</summary>',
               '',
-              '```',
+              '```hcl',
               planOutput.slice(0, 60000),
               '```',
               '',
               '</details>',
+              '',
+              `- ▶️ To **apply** this plan, comment:`,
+              ``,
+              `  \`\`\``,
+              `  /tf apply ${name}`,
+              `  \`\`\``,
+              ``,
+              `- 🔓 To **unlock** this project, comment:`,
+              ``,
+              `  \`\`\``,
+              `  /tf unlock ${name}`,
+              `  \`\`\``,
+              ``,
+              `- 🔄 To **plan** this project again, comment:`,
+              ``,
+              `  \`\`\``,
+              `  /tf plan ${name}`,
+              `  \`\`\``,
+              '',
+              summary,
+              '',
+              '---',
+              '',
+              `- ▶️ To **apply** all plans from this Pull Request, comment:`,
+              ``,
+              `  \`\`\``,
+              `  /tf apply`,
+              `  \`\`\``,
+              ``,
+              `- 🔓 To **unlock** all projects in this Pull Request, comment:`,
+              ``,
+              `  \`\`\``,
+              `  /tf unlock`,
+              `  \`\`\``,
             ].join('\n')
+
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
