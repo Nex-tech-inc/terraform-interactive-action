@@ -77,14 +77,14 @@ async function run() {
           return
         }
         core.setOutput('action', 'unlock')
-        core.setOutput('projects', JSON.stringify([mergeWithDefaults(config.defaults || {}, raw)]))
+        core.setOutput('projects', JSON.stringify(buildPlanPayload([mergeWithDefaults(config.defaults || {}, raw)])))
         core.setOutput('pr-number', String(prNumber))
         core.setOutput('commenter', commenter)
         return
       }
       const allProjects = (config.projects || []).map((p) => mergeWithDefaults(config.defaults || {}, p))
       core.setOutput('action', 'unlock')
-      core.setOutput('projects', JSON.stringify(allProjects))
+      core.setOutput('projects', JSON.stringify(buildPlanPayload(allProjects)))
       core.setOutput('pr-number', String(prNumber))
       core.setOutput('commenter', commenter)
       return
