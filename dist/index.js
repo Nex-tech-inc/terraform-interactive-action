@@ -34670,6 +34670,9 @@ function mergeWithDefaults(defaults, project) {
         defaults.policies?.require_apply_before_merge ??
         true,
     },
+    autoplan: {
+      enabled: project.autoplan?.enabled !== false,
+    },
   }
 }
 
@@ -34768,7 +34771,8 @@ async function run() {
   try {
     const token = core.getInput('github-token', { required: true })
     const configPath = core.getInput('config-path') || '.terraform-deployment'
-    const commentBody = core.getInput('comment-body', { required: true })
+    const trigger = core.getInput('trigger') || 'comment'
+    const commentBody = core.getInput('comment-body') || ''
     const prNumber = parseInt(core.getInput('pr-number', { required: true }), 10)
     const headSha = core.getInput('head-sha', { required: true })
     const changedFiles = JSON.parse(core.getInput('changed-files', { required: true }))
@@ -34779,20 +34783,37 @@ async function run() {
     const octokit = github.getOctokit(token)
     const { owner, repo } = github.context.repo
 
-    // 1. Parse the /tf command
-    const parsed = parseCommand(commentBody)
-    if (!parsed.valid) {
-      await postComment(octokit, owner, repo, prNumber, renderCommandError(parsed.error))
-      core.setOutput('action', 'none')
-      return
-    }
-
     // 2. Load and validate config
     let config
     try {
       config = loadConfig(configPath)
     } catch (err) {
       await postComment(octokit, owner, repo, prNumber, renderConfigError(err.message))
+      core.setOutput('action', 'none')
+      return
+    }
+
+    // 2a. Autoplan path — runs when triggered by PR open/push, not a comment
+    if (trigger === 'autoplan') {
+      const eligibleRaw = (config.projects || []).filter((p) => p.autoplan?.enabled !== false)
+      const autoplanProjects = resolveChangedProjects(changedFiles, eligibleRaw)
+      if (autoplanProjects.length === 0) {
+        core.setOutput('action', 'none')
+        return
+      }
+      const payload = buildPlanPayload(autoplanProjects.map((p) => mergeWithDefaults(config.defaults || {}, p)))
+      core.setOutput('action', 'plan')
+      core.setOutput('projects', JSON.stringify(payload))
+      core.setOutput('pr-number', String(prNumber))
+      core.setOutput('head-sha', headSha)
+      core.setOutput('commenter', commenter)
+      return
+    }
+
+    // 1. Parse the /tf command (comment-triggered path only)
+    const parsed = parseCommand(commentBody)
+    if (!parsed.valid) {
+      await postComment(octokit, owner, repo, prNumber, renderCommandError(parsed.error))
       core.setOutput('action', 'none')
       return
     }

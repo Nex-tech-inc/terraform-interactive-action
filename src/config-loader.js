@@ -92,6 +92,9 @@ function mergeWithDefaults(defaults, project) {
         defaults.policies?.require_apply_before_merge ??
         true,
     },
+    autoplan: {
+      enabled: project.autoplan?.enabled !== false,
+    },
   }
 }
 

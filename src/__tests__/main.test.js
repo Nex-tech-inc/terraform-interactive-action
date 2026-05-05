@@ -288,3 +288,88 @@ describe('unlock command', () => {
     expect(mockCreateComment.mock.calls[0][0].body).toMatch(/Unknown project/i)
   })
 })
+
+const AUTOPLAN_CONFIG = {
+  version: 1,
+  defaults: {
+    terraform_version: '1.9.0',
+    aws_region: 'us-east-1',
+    backend: { bucket: 'my-bucket' },
+  },
+  projects: [
+    {
+      name: 'network-prod',
+      dir: 'infra/network/prod',
+      when_modified: ['infra/network/**'],
+      backend: { key: 'network/prod.tfstate' },
+      deploy: { role_arn: 'arn:aws:iam::111:role/tf', aws_region: 'us-east-1' },
+    },
+    {
+      name: 'app-staging',
+      dir: 'infra/app/staging',
+      when_modified: ['infra/app/**'],
+      backend: { key: 'app/staging.tfstate' },
+      deploy: { role_arn: 'arn:aws:iam::222:role/tf', aws_region: 'us-east-1' },
+      autoplan: { enabled: false },
+    },
+  ],
+}
+
+function buildAutoplanInputs(overrides = {}) {
+  const defaults = {
+    'github-token': 'fake-token',
+    'config-path': writeTempConfig(AUTOPLAN_CONFIG),
+    trigger: 'autoplan',
+    'comment-body': '',
+    'pr-number': '42',
+    'head-sha': 'abc123',
+    'changed-files': JSON.stringify(['infra/network/prod/main.tf']),
+    'codeowners-content': '',
+    'approved-reviewers': '[]',
+    commenter: 'alice',
+  }
+  return { ...defaults, ...overrides }
+}
+
+describe('autoplan trigger', () => {
+  test('outputs action=plan for changed projects with autoplan enabled', async () => {
+    const inputs = buildAutoplanInputs()
+    setupMocks(inputs)
+
+    await require('../main')
+
+    const actionOutput = mockSetOutput.mock.calls.find(([k]) => k === 'action')
+    expect(actionOutput[1]).toBe('plan')
+    const projectsOutput = mockSetOutput.mock.calls.find(([k]) => k === 'projects')
+    const projects = JSON.parse(projectsOutput[1])
+    expect(projects).toHaveLength(1)
+    expect(projects[0].name).toBe('network-prod')
+    expect(mockCreateComment).not.toHaveBeenCalled()
+  })
+
+  test('outputs action=none silently when no changed projects match', async () => {
+    const inputs = buildAutoplanInputs({
+      'changed-files': JSON.stringify(['README.md']),
+    })
+    setupMocks(inputs)
+
+    await require('../main')
+
+    const actionOutput = mockSetOutput.mock.calls.find(([k]) => k === 'action')
+    expect(actionOutput[1]).toBe('none')
+    expect(mockCreateComment).not.toHaveBeenCalled()
+  })
+
+  test('skips projects with autoplan.enabled=false', async () => {
+    const inputs = buildAutoplanInputs({
+      'changed-files': JSON.stringify(['infra/app/staging/main.tf']),
+    })
+    setupMocks(inputs)
+
+    await require('../main')
+
+    const actionOutput = mockSetOutput.mock.calls.find(([k]) => k === 'action')
+    expect(actionOutput[1]).toBe('none')
+    expect(mockCreateComment).not.toHaveBeenCalled()
+  })
+})

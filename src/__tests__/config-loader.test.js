@@ -124,6 +124,41 @@ describe('mergeWithDefaults', () => {
   test('inherits policies.require_apply_before_merge from defaults', () => {
     expect(mergeWithDefaults(defaults, project).policies.require_apply_before_merge).toBe(true)
   })
+
+  test('autoplan.enabled defaults to true when not specified', () => {
+    const testProject = {
+      name: 'network-prod',
+      dir: 'infra/network/prod',
+      backend: { key: 'network/prod.tfstate' },
+      deploy: { role_arn: 'arn:aws:iam::111:role/tf', aws_region: 'us-east-1' },
+    }
+    const result = mergeWithDefaults({}, testProject)
+    expect(result.autoplan).toEqual({ enabled: true })
+  })
+
+  test('autoplan.enabled is false when explicitly set to false', () => {
+    const testProject = {
+      name: 'network-prod',
+      dir: 'infra/network/prod',
+      autoplan: { enabled: false },
+      backend: { key: 'network/prod.tfstate' },
+      deploy: { role_arn: 'arn:aws:iam::111:role/tf', aws_region: 'us-east-1' },
+    }
+    const result = mergeWithDefaults({}, testProject)
+    expect(result.autoplan).toEqual({ enabled: false })
+  })
+
+  test('autoplan.enabled is true when explicitly set to true', () => {
+    const testProject = {
+      name: 'network-prod',
+      dir: 'infra/network/prod',
+      autoplan: { enabled: true },
+      backend: { key: 'network/prod.tfstate' },
+      deploy: { role_arn: 'arn:aws:iam::111:role/tf', aws_region: 'us-east-1' },
+    }
+    const result = mergeWithDefaults({}, testProject)
+    expect(result.autoplan).toEqual({ enabled: true })
+  })
 })
 
 describe('resolveProject', () => {
