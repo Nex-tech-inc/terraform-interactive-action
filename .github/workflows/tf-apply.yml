@@ -19,6 +19,10 @@ on:
         description: 'GitHub username who triggered the apply'
         required: true
         type: string
+    secrets:
+      GITHUB_TOKEN:
+        description: 'GitHub token from the calling repository for posting comments'
+        required: false
 
 permissions:
   contents: write
@@ -85,6 +89,7 @@ jobs:
           PR_NUMBER: ${{ inputs.pr-number }}
         uses: actions/github-script@v7
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const name = process.env.PROJECT_NAME
             const prNumber = parseInt(process.env.PR_NUMBER, 10)
@@ -113,6 +118,7 @@ jobs:
           PR_NUMBER: ${{ inputs.pr-number }}
         uses: actions/github-script@v7
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const { execSync } = require('child_process')
             const fs = require('fs')
@@ -207,6 +213,7 @@ jobs:
           COMMENTER: ${{ inputs.commenter }}
         uses: actions/github-script@v7
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs')
             const dir = process.env.PROJECT_DIR
@@ -245,6 +252,7 @@ jobs:
       - name: Post merge notice comment
         uses: actions/github-script@v7
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             await github.rest.issues.createComment({
               owner: context.repo.owner,
@@ -256,6 +264,7 @@ jobs:
       - name: Set apply-required status to success
         uses: actions/github-script@v7
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             await github.rest.repos.createCommitStatus({
               owner: context.repo.owner,
@@ -272,6 +281,7 @@ jobs:
           PROJECTS_JSON: ${{ inputs.projects }}
         uses: actions/github-script@v7
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const projects = JSON.parse(process.env.PROJECTS_JSON)
             const requireMerge = projects.every(p => p.require_merge_after_apply !== false)
@@ -281,6 +291,7 @@ jobs:
         if: steps.merge-policy.outputs.required == 'true'
         uses: actions/github-script@v7
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             try {
               await github.rest.pulls.merge({
@@ -303,6 +314,7 @@ jobs:
         if: steps.merge-policy.outputs.required == 'true'
         uses: actions/github-script@v7
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             try {
               const pr = await github.rest.pulls.get({
