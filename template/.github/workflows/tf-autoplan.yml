@@ -64,7 +64,7 @@ jobs:
 
       - name: Run control action
         id: control
-        uses: Nex-tech-inc/terraform-interactive-action@v1.0.0
+        uses: Nex-tech-inc/terraform-interactive-action@v1.0.1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           config-path: .terraform-deployment
@@ -79,7 +79,7 @@ jobs:
   plan:
     needs: dispatch
     if: needs.dispatch.outputs.action == 'plan'
-    uses: Nex-tech-inc/terraform-interactive-action/.github/workflows/tf-plan.yml@v1.0.0
+    uses: Nex-tech-inc/terraform-interactive-action/.github/workflows/tf-plan.yml@v1.0.1
     with:
       projects: ${{ needs.dispatch.outputs.projects }}
       pr-number: ${{ needs.dispatch.outputs.pr-number }}
