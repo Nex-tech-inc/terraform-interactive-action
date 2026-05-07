@@ -225,22 +225,60 @@ jobs:
               ? fs.readFileSync(`${dir}/plan-output.txt`, 'utf8')
               : '(no plan output found)'
             const success = process.env.PLAN_EXIT_CODE === '0'
-            const icon = success ? '✅' : '❌'
-            const status = success ? 'succeeded' : 'failed'
             const name = process.env.PROJECT_NAME
             const artifactId = process.env.ARTIFACT_ID
-            const artifactLine = artifactId ? `\n<!-- tfplan-artifact-id:${artifactId} -->` : ''
+
+            // Parse resource change counts from plan output (same format Terraform prints)
+            let added = 0, changed = 0, destroyed = 0
+            const summaryMatch = planOutput.match(/Plan:\s+(\d+)\s+to add,\s+(\d+)\s+to change,\s+(\d+)\s+to destroy/)
+            if (summaryMatch) {
+              added = parseInt(summaryMatch[1], 10)
+              changed = parseInt(summaryMatch[2], 10)
+              destroyed = parseInt(summaryMatch[3], 10)
+            }
+            const noChanges = /No changes\. Your infrastructure matches the configuration/.test(planOutput)
+
+            let header, summary, commands
+            if (!success) {
+              header = `## ❌ Terraform Plan Failed — \`${name}\``
+              summary = ''
+              commands = ''
+            } else if (noChanges) {
+              header = `## ✅ Terraform Plan — \`${name}\``
+              summary = `\nNo changes. Infrastructure is up-to-date.\n`
+              commands = ''
+            } else {
+              header = `## ✅ Terraform Plan — \`${name}\``
+              const parts = []
+              if (added > 0)     parts.push(`**${added}** to add`)
+              if (changed > 0)   parts.push(`**${changed}** to change`)
+              if (destroyed > 0) parts.push(`**${destroyed}** to destroy 🔴`)
+              summary = `\n${parts.join(', ')}\n`
+              commands = [
+                '',
+                '---',
+                '**Available commands:**',
+                `- \`/tf apply\` — apply all planned projects`,
+                `- \`/tf apply ${name}\` — apply only this project`,
+                `- \`/tf unlock\` — release the lock on this PR`,
+              ].join('\n')
+            }
+
+            const artifactComment = artifactId ? `\n<!-- tfplan-artifact-id:${artifactId} -->` : ''
             const body = [
-              `${icon} **Terraform Plan \`${name}\`** ${status}${artifactLine}`,
+              header,
+              summary,
+              '<details><summary>Show Plan</summary>',
               '',
-              '<details><summary>Plan Output</summary>',
-              '',
-              '```',
+              '```hcl',
               planOutput.slice(0, 60000),
               '```',
               '',
               '</details>',
+              commands,
+              artifactComment,
             ].join('\n')
+
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
