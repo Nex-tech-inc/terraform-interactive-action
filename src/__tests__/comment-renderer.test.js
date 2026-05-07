@@ -11,7 +11,6 @@ const {
   renderApplyFailed,
   renderLockBlocked,
   renderUnlockResult,
-  renderLockMismatch,
 } = require('../comment-renderer')
 
 const PROJECT = { name: 'network-prod' }
@@ -122,10 +121,4 @@ describe('renderUnlockResult', () => {
   })
 })
 
-describe('renderLockMismatch', () => {
-  test('includes project name and run /tf plan instruction', () => {
-    const result = renderLockMismatch('s3-bucket')
-    expect(result).toContain('s3-bucket')
-    expect(result).toContain('/tf plan')
-  })
-})
+

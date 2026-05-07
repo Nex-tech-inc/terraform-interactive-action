@@ -102,7 +102,7 @@ jobs:
 
       - name: Run control action
         id: control
-        uses: Nex-tech-inc/terraform-interactive-action@v1.0.6
+        uses: Nex-tech-inc/terraform-interactive-action@v1.0.11
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           config-path: .terraform-deployment
@@ -117,7 +117,7 @@ jobs:
   plan:
     needs: dispatch
     if: needs.dispatch.outputs.action == 'plan'
-    uses: Nex-tech-inc/terraform-interactive-action/.github/workflows/tf-plan.yml@v1.0.6
+    uses: Nex-tech-inc/terraform-interactive-action/.github/workflows/tf-plan.yml@v1.0.11
     secrets:
       GH_CALLER_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     with:
@@ -129,7 +129,7 @@ jobs:
   apply:
     needs: dispatch
     if: needs.dispatch.outputs.action == 'apply'
-    uses: Nex-tech-inc/terraform-interactive-action/.github/workflows/tf-apply.yml@v1.0.6
+    uses: Nex-tech-inc/terraform-interactive-action/.github/workflows/tf-apply.yml@v1.0.11
     secrets:
       GH_CALLER_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     with:
@@ -141,7 +141,7 @@ jobs:
   unlock:
     needs: dispatch
     if: needs.dispatch.outputs.action == 'unlock'
-    uses: Nex-tech-inc/terraform-interactive-action/.github/workflows/tf-unlock.yml@v1.0.6
+    uses: Nex-tech-inc/terraform-interactive-action/.github/workflows/tf-unlock.yml@v1.0.11
     secrets:
       GH_CALLER_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     with:

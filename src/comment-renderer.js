@@ -80,13 +80,6 @@ function renderUnlockResult(releasedProjects, commenter) {
   return `🔓 **Terraform Unlock** by @${commenter}: Released locks for ${names}.`
 }
 
-function renderLockMismatch(projectName) {
-  return (
-    `⚠️ **Lock mismatch for \`${projectName}\`**: This PR does not own the current lock.\n\n` +
-    `Run \`/tf plan\` on this PR to acquire the lock before applying.`
-  )
-}
-
 module.exports = {
   renderPlanQueued,
   renderApplyBlocked,
@@ -99,5 +92,4 @@ module.exports = {
   renderApplyFailed,
   renderLockBlocked,
   renderUnlockResult,
-  renderLockMismatch,
 }
