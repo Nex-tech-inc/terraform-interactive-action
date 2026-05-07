@@ -179,10 +179,10 @@ jobs:
       - name: Select Terraform workspace
         working-directory: ${{ matrix.project.dir }}
         env:
-          TF_WORKSPACE: ${{ matrix.project.workspace }}
+          WS_NAME: ${{ matrix.project.workspace }}
         run: |
-          terraform workspace select "$TF_WORKSPACE" || \
-          terraform workspace new "$TF_WORKSPACE"
+          terraform workspace select "$WS_NAME" || \
+          terraform workspace new "$WS_NAME"
 
       - name: Terraform apply
         id: apply
