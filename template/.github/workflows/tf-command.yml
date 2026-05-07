@@ -123,7 +123,6 @@ jobs:
       pr-number: ${{ needs.dispatch.outputs.pr-number }}
       head-sha: ${{ needs.dispatch.outputs.head-sha }}
       commenter: ${{ needs.dispatch.outputs.commenter }}
-    secrets: inherit
 
   apply:
     needs: dispatch
@@ -136,7 +135,6 @@ jobs:
       pr-number: ${{ needs.dispatch.outputs.pr-number }}
       head-sha: ${{ needs.dispatch.outputs.head-sha }}
       commenter: ${{ needs.dispatch.outputs.commenter }}
-    secrets: inherit
 
   unlock:
     needs: dispatch
@@ -148,4 +146,3 @@ jobs:
       projects: ${{ needs.dispatch.outputs.projects }}
       pr-number: ${{ needs.dispatch.outputs.pr-number }}
       commenter: ${{ needs.dispatch.outputs.commenter }}
-    secrets: inherit

@@ -87,4 +87,3 @@ jobs:
       pr-number: ${{ needs.dispatch.outputs.pr-number }}
       head-sha: ${{ needs.dispatch.outputs.head-sha }}
       commenter: ${{ needs.dispatch.outputs.commenter }}
-    secrets: inherit

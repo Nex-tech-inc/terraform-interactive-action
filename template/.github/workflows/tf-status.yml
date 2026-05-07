@@ -6,11 +6,15 @@ on:
 
 permissions:
   statuses: write
+  contents: read
 
 jobs:
   set-pending:
     runs-on: ubuntu-latest
     steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
       - name: Set terraform/apply-required status
         uses: actions/github-script@v7
         with:
