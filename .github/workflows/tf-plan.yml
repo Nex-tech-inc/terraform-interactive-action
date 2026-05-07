@@ -212,6 +212,7 @@ jobs:
         env:
           PROJECT_NAME: ${{ matrix.project.name }}
           PROJECT_DIR: ${{ matrix.project.dir }}
+          PROJECT_WORKSPACE: ${{ matrix.project.workspace }}
           PLAN_EXIT_CODE: ${{ steps.plan.outputs.exit-code }}
           PR_NUMBER: ${{ inputs.pr-number }}
           ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
@@ -226,58 +227,73 @@ jobs:
               : '(no plan output found)'
             const success = process.env.PLAN_EXIT_CODE === '0'
             const name = process.env.PROJECT_NAME
+            const workspace = process.env.PROJECT_WORKSPACE
             const artifactId = process.env.ARTIFACT_ID
 
-            // Parse resource change counts from plan output (same format Terraform prints)
-            let added = 0, changed = 0, destroyed = 0
+            // Parse resource change counts from plan output
             const summaryMatch = planOutput.match(/Plan:\s+(\d+)\s+to add,\s+(\d+)\s+to change,\s+(\d+)\s+to destroy/)
-            if (summaryMatch) {
-              added = parseInt(summaryMatch[1], 10)
-              changed = parseInt(summaryMatch[2], 10)
-              destroyed = parseInt(summaryMatch[3], 10)
-            }
+            const added   = summaryMatch ? parseInt(summaryMatch[1], 10) : 0
+            const changed = summaryMatch ? parseInt(summaryMatch[2], 10) : 0
+            const destroyed = summaryMatch ? parseInt(summaryMatch[3], 10) : 0
             const noChanges = /No changes\. Your infrastructure matches the configuration/.test(planOutput)
 
-            let header, summary, commands
+            const metaHeader = `Ran Plan for project: \`${name}\` dir: \`${dir}\` workspace: \`${workspace}\``
+
+            let planSummary
             if (!success) {
-              header = `## ❌ Terraform Plan Failed — \`${name}\``
-              summary = ''
-              commands = ''
+              planSummary = '**Plan failed.** See output above for details.'
             } else if (noChanges) {
-              header = `## ✅ Terraform Plan — \`${name}\``
-              summary = `\nNo changes. Infrastructure is up-to-date.\n`
-              commands = ''
+              planSummary = 'No changes. Your infrastructure matches the configuration.'
             } else {
-              header = `## ✅ Terraform Plan — \`${name}\``
-              const parts = []
-              if (added > 0)     parts.push(`**${added}** to add`)
-              if (changed > 0)   parts.push(`**${changed}** to change`)
-              if (destroyed > 0) parts.push(`**${destroyed}** to destroy 🔴`)
-              summary = `\n${parts.join(', ')}\n`
-              commands = [
-                '',
-                '---',
-                '**Available commands:**',
-                `- \`/tf apply\` — apply all planned projects`,
-                `- \`/tf apply ${name}\` — apply only this project`,
-                `- \`/tf unlock\` — release the lock on this PR`,
-              ].join('\n')
+              planSummary = `Plan: **${added}** to add, **${changed}** to change, **${destroyed}** to destroy.`
             }
 
-            const artifactComment = artifactId ? `\n<!-- tfplan-artifact-id:${artifactId} -->` : ''
+            const projectCommands = success && !noChanges ? [
+              `* ▶️ To **apply** this plan, comment:`,
+              `  \`\`\``,
+              `  /tf apply ${name}`,
+              `  \`\`\``,
+              `* 🔒 To **unlock** this plan and lock, comment:`,
+              `  \`\`\``,
+              `  /tf unlock ${name}`,
+              `  \`\`\``,
+              `* 🔄 To **plan** this project again, comment:`,
+              `  \`\`\``,
+              `  /tf plan ${name}`,
+              `  \`\`\``,
+            ].join('\n') : ''
+
+            const globalCommands = success && !noChanges ? [
+              `---`,
+              `* ▶️ To **apply** all unapplied plans from this Pull Request, comment:`,
+              `  \`\`\``,
+              `  /tf apply`,
+              `  \`\`\``,
+              `* 🔒 To **unlock** all plans and locks from this Pull Request, comment:`,
+              `  \`\`\``,
+              `  /tf unlock`,
+              `  \`\`\``,
+            ].join('\n') : ''
+
+            const artifactComment = artifactId ? `<!-- tfplan-artifact-id:${artifactId} -->` : ''
+
             const body = [
-              header,
-              summary,
-              '<details><summary>Show Plan</summary>',
+              metaHeader,
               '',
-              '```hcl',
+              '<details><summary>Show Output</summary>',
+              '',
+              '```',
               planOutput.slice(0, 60000),
               '```',
               '',
               '</details>',
-              commands,
+              '',
+              planSummary,
+              '',
+              projectCommands,
+              globalCommands,
               artifactComment,
-            ].join('\n')
+            ].filter(l => l !== undefined).join('\n')
 
             await github.rest.issues.createComment({
               owner: context.repo.owner,
