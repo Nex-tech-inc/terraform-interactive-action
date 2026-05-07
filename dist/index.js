@@ -34607,9 +34607,7 @@ function validateConfig(config) {
       throw new Error(`Project "${project.name}" must have deploy.role_arn`)
     }
     if (!project.backend?.key && !defaultBackendKey) {
-      throw new Error(
-        `Project "${project.name}" must have backend.key (or set a default in defaults.backend.key)`
-      )
+      // key will be auto-derived in mergeWithDefaults as `{dir}/{name}.tfstate`
     }
     if (names.has(project.name)) {
       throw new Error(`Duplicate project name: "${project.name}"`)
@@ -34637,7 +34635,7 @@ function mergeWithDefaults(defaults, project) {
       project.terraform_version || defaults.terraform_version || '1.9.0',
     backend: {
       bucket: project.backend?.bucket || defaults.backend?.bucket || '',
-      key: project.backend?.key || defaults.backend?.key || '',
+      key: project.backend?.key || defaults.backend?.key || `${project.dir}/${project.name}.tfstate`,
       region:
         project.backend?.region ||
         defaults.backend?.region ||

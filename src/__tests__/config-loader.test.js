@@ -70,12 +70,12 @@ describe('validateConfig', () => {
     expect(() => validateConfig(cfg)).toThrow(/deploy.role_arn/)
   })
 
-  test('rejects project missing backend key when no default key exists', () => {
+  test('accepts project missing backend key — auto-derives from dir/name', () => {
     const cfg = {
       version: 1,
       projects: [{ name: 'x', dir: 'infra/x', backend: {}, deploy: { role_arn: 'arn:aws:iam::111:role/tf' } }],
     }
-    expect(() => validateConfig(cfg)).toThrow(/backend.key/)
+    expect(() => validateConfig(cfg)).not.toThrow()
   })
 
   test('rejects duplicate project names', () => {
@@ -95,6 +95,16 @@ describe('mergeWithDefaults', () => {
     const result = mergeWithDefaults(defaults, project)
     expect(result.backend.bucket).toBe('org-terraform-state')
     expect(result.backend.dynamodb_table).toBe('terraform-locks')
+  })
+
+  test('auto-derives backend key from dir/name when not specified', () => {
+    const p = { ...project, backend: {} }
+    expect(mergeWithDefaults({}, p).backend.key).toBe(`${p.dir}/${p.name}.tfstate`)
+  })
+
+  test('project-level backend key overrides auto-derived key', () => {
+    const result = mergeWithDefaults(defaults, project)
+    expect(result.backend.key).toBe('network/prod.tfstate')
   })
 
   test('inherits terraform_version from defaults', () => {

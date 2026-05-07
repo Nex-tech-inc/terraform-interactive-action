@@ -20,8 +20,9 @@ projects:
       - infra/network/**
       - modules/vpc/**
     workspace: default
-    backend:
-      key: network/prod.tfstate
+    # backend.key is optional — defaults to "{dir}/{name}.tfstate"
+    # backend:
+    #   key: custom/path.tfstate
     deploy:
       role_arn: arn:aws:iam::111111111111:role/github-terraform-prod
       account_id: "111111111111"
@@ -30,8 +31,7 @@ projects:
   - name: app-staging
     dir: infra/app/staging
     # when_modified omitted: defaults to infra/app/staging/**
-    backend:
-      key: app/staging.tfstate
+    # backend.key auto-derived as: infra/app/staging/app-staging.tfstate
     deploy:
       role_arn: arn:aws:iam::222222222222:role/github-terraform-staging
       account_id: "222222222222"
