@@ -40,15 +40,29 @@ jobs:
         id: release
         env:
           PROJECTS_JSON: ${{ inputs.projects }}
+          PR_NUMBER: ${{ inputs.pr-number }}
         run: |
           RELEASED=""
+          NOT_OWNER=""
           while IFS=$'\t' read -r name bucket; do
             LOCK_KEY="locks/${name}.lock"
+            LOCK_FILE="/tmp/tf-lock-${name}.json"
+
+            # Fetch existing lock (if any)
+            if aws s3api get-object --bucket "$bucket" --key "$LOCK_KEY" "$LOCK_FILE" 2>/dev/null; then
+              LOCK_PR=$(jq -r '.pr_number' "$LOCK_FILE")
+              if [ "$LOCK_PR" != "$PR_NUMBER" ]; then
+                NOT_OWNER="${NOT_OWNER}${NOT_OWNER:+, }\`${name}\` (locked by PR #${LOCK_PR})"
+                continue
+              fi
+            fi
+
             aws s3api delete-object --bucket "$bucket" --key "$LOCK_KEY" 2>/dev/null
             RELEASED="${RELEASED}${RELEASED:+, }\`${name}\`"
           done < <(echo "$PROJECTS_JSON" | jq -r '.[] | [.name, .backend_bucket] | @tsv')
 
           echo "RELEASED_PROJECTS=${RELEASED:-none}" >> "$GITHUB_ENV"
+          echo "NOT_OWNER_PROJECTS=${NOT_OWNER}" >> "$GITHUB_ENV"
 
       - name: Post unlock comment
         env:
@@ -61,14 +75,22 @@ jobs:
             const prNumber = parseInt(process.env.PR_NUMBER, 10)
             const commenter = process.env.COMMENTER
             const released = process.env.RELEASED_PROJECTS
+            const notOwner = process.env.NOT_OWNER_PROJECTS
 
-            const body = released === 'none'
-              ? `🔓 **Terraform Unlock** by @${commenter}: No active locks found — nothing to release.`
-              : `🔓 **Terraform Unlock** by @${commenter}: Released locks for ${released}.`
+            const lines = []
+            if (released !== 'none') {
+              lines.push(`🔓 **Terraform Unlock** by @${commenter}: Released locks for ${released}.`)
+            }
+            if (notOwner) {
+              lines.push(`⛔ Could not unlock ${notOwner} — this PR does not own those locks. Go to the locking PR to unlock.`)
+            }
+            if (released === 'none' && !notOwner) {
+              lines.push(`🔓 **Terraform Unlock** by @${commenter}: No active locks found — nothing to release.`)
+            }
 
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: prNumber,
-              body,
+              body: lines.join('\n\n'),
             })

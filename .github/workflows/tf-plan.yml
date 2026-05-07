@@ -139,7 +139,7 @@ jobs:
               issue_number: prNumber,
               body:
                 `🔒 **Project \`${name}\` is locked by PR #${lockPr}** (@${lockBy}, since ${lockAt}).\n\n` +
-                `Run \`/tf unlock\` in this PR to steal the lock if that PR is abandoned.`,
+                `To unlock, go to PR #${lockPr} and comment \`/tf unlock\`.`,
             })
 
       - name: Terraform init
