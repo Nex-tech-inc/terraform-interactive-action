@@ -19,11 +19,6 @@ on:
         description: 'GitHub username who triggered the apply'
         required: true
         type: string
-    secrets:
-      GITHUB_TOKEN:
-        description: 'GitHub token from the calling repository for posting comments'
-        required: false
-
 permissions:
   contents: write
   pull-requests: write
