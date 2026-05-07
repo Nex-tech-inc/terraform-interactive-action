@@ -42,9 +42,6 @@ jobs:
               content: 'eyes',
             })
 
-      - name: Check out repository
-        uses: actions/checkout@v4
-
       - name: Gather PR metadata
         id: pr-meta
         uses: actions/github-script@v7
@@ -97,6 +94,11 @@ jobs:
               } catch {}
             }
             core.setOutput('codeowners-content', codeowners)
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.pr-meta.outputs.head-sha }}
 
       - name: Run control action
         id: control
