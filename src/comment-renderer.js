@@ -96,7 +96,6 @@ module.exports = {
   renderUnknownProject,
   renderCommandError,
   renderConfigError,
-
   renderApplyFailed,
   renderLockBlocked,
   renderUnlockResult,

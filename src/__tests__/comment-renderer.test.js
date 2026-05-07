@@ -7,7 +7,7 @@ const {
   renderUnknownProject,
   renderCommandError,
   renderConfigError,
-  renderPlanShow,
+
   renderApplyFailed,
   renderLockBlocked,
   renderUnlockResult,
@@ -85,7 +85,6 @@ describe('renderConfigError', () => {
     expect(renderConfigError('version must be 1')).toContain('version must be 1')
   })
 })
-
 
 describe('renderApplyFailed', () => {
   test('includes project name and error', () => {

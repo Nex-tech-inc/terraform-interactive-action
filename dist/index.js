@@ -34512,8 +34512,8 @@ function renderCommandError(error) {
     `- \`/tf plan\` — plan all projects affected by this PR\n` +
     `- \`/tf plan <project>\` — plan a specific project\n` +
     `- \`/tf apply\` — apply all projects affected by this PR\n` +
-    `- \`/tf apply <project>\` — apply a specific project\n` +
-    `- \`/tf show <project>\` — show the latest saved plan for a project`
+    `- \`/tf apply <project>\` — apply a specific project\n`
+
   )
 }
 
@@ -34521,9 +34521,6 @@ function renderConfigError(error) {
   return `❌ **Config Error**: ${error}\n\nCheck your \`.terraform-deployment\` file.`
 }
 
-function renderPlanShow(projectName, planSummary) {
-  return `📋 **Plan for \`${projectName}\`**\n\n\`\`\`\n${planSummary}\n\`\`\``
-}
 
 function renderApplyFailed(projectName, error) {
   return (
@@ -34563,7 +34560,6 @@ module.exports = {
   renderUnknownProject,
   renderCommandError,
   renderConfigError,
-  renderPlanShow,
   renderApplyFailed,
   renderLockBlocked,
   renderUnlockResult,
@@ -34862,11 +34858,9 @@ async function run() {
     }
 
     // 4. Dispatch: plan
-    if (parsed.command === 'plan' || parsed.command === 'show') {
+    if (parsed.command === 'plan') {
       const payload = buildPlanPayload(targetProjects)
-      if (parsed.command === 'plan') {
-        await postComment(octokit, owner, repo, prNumber, renderPlanQueued(targetProjects))
-      }
+      await postComment(octokit, owner, repo, prNumber, renderPlanQueued(targetProjects))
       core.setOutput('action', parsed.command)
       core.setOutput('projects', JSON.stringify(payload))
       core.setOutput('pr-number', String(prNumber))
