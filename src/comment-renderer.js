@@ -48,8 +48,8 @@ function renderCommandError(error) {
     `- \`/tf plan\` — plan all projects affected by this PR\n` +
     `- \`/tf plan <project>\` — plan a specific project\n` +
     `- \`/tf apply\` — apply all projects affected by this PR\n` +
-    `- \`/tf apply <project>\` — apply a specific project\n` +
-    `- \`/tf show <project>\` — show the latest saved plan for a project`
+    `- \`/tf apply <project>\` — apply a specific project\n`
+
   )
 }
 

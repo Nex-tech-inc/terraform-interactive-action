@@ -111,7 +111,7 @@ async function run() {
     }
 
     // 4. Dispatch: plan
-    if (parsed.command === 'plan' || parsed.command === 'show') {
+    if (parsed.command === 'plan') {
       const payload = buildPlanPayload(targetProjects)
       if (parsed.command === 'plan') {
         await postComment(octokit, owner, repo, prNumber, renderPlanQueued(targetProjects))
