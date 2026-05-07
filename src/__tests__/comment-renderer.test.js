@@ -86,14 +86,6 @@ describe('renderConfigError', () => {
   })
 })
 
-describe('renderPlanShow', () => {
-  test('includes project name and plan summary in a code block', () => {
-    const out = renderPlanShow('network-prod', '1 to add, 0 to change, 0 to destroy')
-    expect(out).toContain('network-prod')
-    expect(out).toContain('1 to add')
-    expect(out).toContain('```')
-  })
-})
 
 describe('renderApplyFailed', () => {
   test('includes project name and error', () => {

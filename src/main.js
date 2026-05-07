@@ -113,9 +113,7 @@ async function run() {
     // 4. Dispatch: plan
     if (parsed.command === 'plan') {
       const payload = buildPlanPayload(targetProjects)
-      if (parsed.command === 'plan') {
-        await postComment(octokit, owner, repo, prNumber, renderPlanQueued(targetProjects))
-      }
+      await postComment(octokit, owner, repo, prNumber, renderPlanQueued(targetProjects))
       core.setOutput('action', parsed.command)
       core.setOutput('projects', JSON.stringify(payload))
       core.setOutput('pr-number', String(prNumber))

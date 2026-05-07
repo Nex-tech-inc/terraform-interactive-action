@@ -57,9 +57,6 @@ function renderConfigError(error) {
   return `❌ **Config Error**: ${error}\n\nCheck your \`.terraform-deployment\` file.`
 }
 
-function renderPlanShow(projectName, planSummary) {
-  return `📋 **Plan for \`${projectName}\`**\n\n\`\`\`\n${planSummary}\n\`\`\``
-}
 
 function renderApplyFailed(projectName, error) {
   return (
@@ -99,7 +96,7 @@ module.exports = {
   renderUnknownProject,
   renderCommandError,
   renderConfigError,
-  renderPlanShow,
+
   renderApplyFailed,
   renderLockBlocked,
   renderUnlockResult,
