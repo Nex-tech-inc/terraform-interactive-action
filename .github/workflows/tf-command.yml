@@ -9,7 +9,6 @@ permissions:
   pull-requests: write
   issues: write
   statuses: write
-  id-token: write
   actions: read
 
 concurrency:

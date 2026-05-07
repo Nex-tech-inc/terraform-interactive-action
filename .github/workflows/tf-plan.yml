@@ -162,9 +162,11 @@ jobs:
       - name: Select Terraform workspace
         if: env.LOCK_BLOCKED != 'true'
         working-directory: ${{ matrix.project.dir }}
+        env:
+          TF_WORKSPACE: ${{ matrix.project.workspace }}
         run: |
-          terraform workspace select "${{ matrix.project.workspace }}" || \
-          terraform workspace new "${{ matrix.project.workspace }}"
+          terraform workspace select "$TF_WORKSPACE" || \
+          terraform workspace new "$TF_WORKSPACE"
 
       - name: Terraform plan
         id: plan

@@ -178,9 +178,11 @@ jobs:
 
       - name: Select Terraform workspace
         working-directory: ${{ matrix.project.dir }}
+        env:
+          TF_WORKSPACE: ${{ matrix.project.workspace }}
         run: |
-          terraform workspace select "${{ matrix.project.workspace }}" || \
-          terraform workspace new "${{ matrix.project.workspace }}"
+          terraform workspace select "$TF_WORKSPACE" || \
+          terraform workspace new "$TF_WORKSPACE"
 
       - name: Terraform apply
         id: apply
